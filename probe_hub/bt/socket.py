@@ -360,7 +360,11 @@ class socket(log.Logger):
         if self.step == WAIT_HELLO:
             self.fw = "".join(map(chr, data[1:33]))
             self.bat = data[33]
-            self.bat_raw = struct.unpack("<h","".join(map(chr, data[35:26])))
+            try:
+                self.bat_raw = struct.unpack("<h","".join(map(chr, data[35:26])))
+            except:
+                self.bat_raw = 0
+                
             self.set_time()
             return
             
