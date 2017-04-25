@@ -1,0 +1,17 @@
+*.o
+*.hex
+*.lss
+*.map
+*.epp
+*.mk
+*.dat
+*.elf
+*~
+makefile
+*.pyc
+/psychosonda_bt_ng192/Release
+/psychosonda_bt_ng192/Debug
+/psychosonda_bt_ng192/utils/data
+/psychosonda_sd_bootloader/Release
+/psychosonda_sd_bootloader/Debug
+
