@@ -18,7 +18,7 @@ class Connection(log.Logger):
         self.parent = parent
         self.log("Added", log.INFO)
         self.tx_data = ""
-        self.tx_chunk = 1024
+        self.tx_chunk = 1024 * 1024
 
     def work(self):
         if (self.tx_data):
@@ -255,7 +255,7 @@ class Net(common.glue.MyThread, log.Logger):
                     try:
                         data = ""
                         while True:
-                            data += self.connections[c].handle.recv(1024)
+                            data += self.connections[c].handle.recv(1024 * 1024)
                             if not data:
                                 break
                             
