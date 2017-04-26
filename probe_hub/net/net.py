@@ -1,14 +1,14 @@
 import socket
 import cmd
 import common.log as log
-import time
 import errno
 import pickle
 import common.glue
-from posix import wait
+import threading
 
-class Connection(log.Logger):
+class Connection(log.Logger, threading.Thread):
     def __init__(self, handle, parent, name):
+        threading.Thread.__init__(self)
         log.Logger.__init__(self, "Unknown Connection")
         self.parser_state = 0
         self.data = []
@@ -17,11 +17,10 @@ class Connection(log.Logger):
         self.handle = handle
         self.parent = parent
         self.log("Added", log.INFO)
+        self.alive = True
 
     def __del__(self):
-        self.handle.shutdown(socket.SHUT_RDWR)
-        self.handle.close()
-        self.log("Removed", log.INFO)
+        self.alive = False
         
     def parse(self, data):
         self.log("RX: %ub" % len(data), log.DEBUG)
@@ -60,25 +59,13 @@ class Connection(log.Logger):
                 self.len -= 1
                 if self.len <= 0:
                     self.parser_state = 0
-                    #self.log("RX: %ub" % len(self.data), log.DEBUG)
                     bin_data = "".join(map(chr, self.data))
-#                     try:
                     self.parent.internal_write(["data", self.name, pickle.loads(bin_data)])
-#                     except ValueError:
-#                         f = open("/tmp/last_rcv_%s.bin" % self.name, "wb")
-#                         f.write(bin_data)
-#                         f.close()
-#                         raise ValueError
                 continue    
             
             
     def send(self, data):
         data = pickle.dumps(data)
-
-#         f = open("/tmp/last_snd_%s.bin" % self.name, "wb")
-#         f.write(data)
-#         f.close()
-
         
         packet = []
         packet.append(0xAA)
@@ -90,16 +77,27 @@ class Connection(log.Logger):
         bin_data = "".join(map(chr, packet))
         bin_data += data
         
-        chunk = 1024
-        
-        self.log("To send: %ub" % len(bin_data), log.DEBUG)
-        while (bin_data):
+        self.log("TX: %ub" % len(bin_data), log.DEBUG)
+        self.handle.sendall(bin_data)
+    
+    def run(self):
+        while self.alive:
             try:
-                self.handle.send(bin_data[:chunk])
-                self.log("TX: %ub" % (len(bin_data[:chunk])), log.DEBUG)
-                bin_data = bin_data[chunk:]          
+                data = self.handle.recv(1024, )
+                if data:
+                    self.parse(data)
+                else:
+                    self.alive = False
+                
             except socket.error, e:
-                self.log("TX: error %s" % (str(e)), log.DEBUG)        
+                err = e.args[0]
+                if err == errno.ETIMEDOUT:
+                    continue
+             
+            
+        self.handle.shutdown(socket.SHUT_RDWR)
+        self.handle.close()
+        self.log("Removed", log.INFO)
 
             
 class Net(common.glue.MyThread, log.Logger):
@@ -140,7 +138,8 @@ class Net(common.glue.MyThread, log.Logger):
 
         handle.setblocking(0)
         self.connections[client] = Connection(handle, self, client)
-
+        self.connections[client].start()
+        
         self.internal_write(["add", client])
         return client
     
@@ -156,7 +155,8 @@ class Net(common.glue.MyThread, log.Logger):
         self.log("Connection to %s@%u" % (address, port), log.INFO)
         try:
             self.handle.connect((address, port))
-            self.handle.setblocking(0)
+#             self.handle.setblocking(0)
+            self.handle.settimeout(1)
             self.internal_write(["role", "client"])
             self.role = "client"
             self.add_connection(self.handle, "master")
@@ -211,8 +211,7 @@ class Net(common.glue.MyThread, log.Logger):
  
                 if cmd == "send":
                     self.send(msg[1], msg[2])
-                    
-            data = ""        
+    
                     
             if self.role == "none":
                 if self.configuration == "server":
@@ -240,32 +239,32 @@ class Net(common.glue.MyThread, log.Logger):
                     else:
                         self.log(e, log.ERROR)
                 
-            if self.role in ["server", "client"]:
-                #RX
-                for c in self.connections.keys():
-                    waiting = False
-                    try:
-                        data = ""
-                        while True:
-                            data += self.connections[c].handle.recv(1024)
-                            if not data:
-                                break
-                            
-                    except socket.error, e:
-                        err = e.args[0]
-                        if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
-                            #waiting for data
-                            waiting = True
-                            pass 
-                        else:
-                            self.log(e, log.ERROR)
-
-                    if len(data) == 0 and not waiting:
-                        self.del_connection(c)
-                        continue
-                    
-                    if data:
-                        self.connections[c].parse(data)
+#             if self.role in ["server", "client"]:
+#                 #RX
+#                 for c in self.connections.keys():
+#                     waiting = False
+#                     try:
+#                         data = ""
+#                         while True:
+#                             data += self.connections[c].handle.recv(1024)
+#                             if not data:
+#                                 break
+#                             
+#                     except socket.error, e:
+#                         err = e.args[0]
+#                         if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+#                             #waiting for data
+#                             waiting = True
+#                             pass 
+#                         else:
+#                             self.log(e, log.ERROR)
+# 
+#                     if len(data) == 0 and not waiting:
+#                         self.del_connection(c)
+#                         continue
+#                     
+#                     if data:
+#                         self.connections[c].parse(data)
                          
 #             time.sleep(0.1)    
 
