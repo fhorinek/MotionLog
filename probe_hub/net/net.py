@@ -5,6 +5,7 @@ import time
 import errno
 import pickle
 import common.glue
+from posix import wait
 
 class Connection(log.Logger):
     def __init__(self, handle, parent, name):
@@ -17,7 +18,7 @@ class Connection(log.Logger):
         self.parent = parent
         self.log("Added", log.INFO)
         self.tx_data = ""
-        self.tx_chunk = 1024 * 30
+        self.tx_chunk = 1024
 
     def work(self):
         if (self.tx_data):
@@ -250,25 +251,29 @@ class Net(common.glue.MyThread, log.Logger):
                     self.connections[c].work()
                 #RX
                 for c in self.connections.keys():
+                    waiting = False
                     try:
                         data = ""
                         while True:
-                            data += self.connections[c].handle.recv(1024 * 50)
+                            data += self.connections[c].handle.recv(1024)
                             if not data:
                                 break
                             
                     except socket.error, e:
                         err = e.args[0]
                         if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
-                            continue
+                            #waiting for data
+                            waiting = True
+                            pass 
                         else:
                             self.log(e, log.ERROR)
 
-                    if len(data) == 0:
+                    if len(data) == 0 and not waiting:
                         self.del_connection(c)
                         continue
                     
-                    self.connections[c].parse(data)
+                    if data:
+                        self.connections[c].parse(data)
                          
             time.sleep(0.1)    
 
