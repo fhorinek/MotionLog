@@ -17,18 +17,6 @@ class Connection(log.Logger):
         self.handle = handle
         self.parent = parent
         self.log("Added", log.INFO)
-        self.tx_data = ""
-        self.tx_chunk = 1024 * 1024
-
-    def work(self):
-        if (self.tx_data):
-            try:
-                self.handle.send(self.tx_data[:self.tx_chunk])
-                self.log("TX: %ub" % (len(self.tx_data[:self.tx_chunk])), log.DEBUG)
-                self.tx_data = self.tx_data[self.tx_chunk:]          
-            except socket.error, e:
-                self.log("TX: error %s" % (str(e)), log.DEBUG)
-                
 
     def __del__(self):
         self.handle.shutdown(socket.SHUT_RDWR)
@@ -101,10 +89,17 @@ class Connection(log.Logger):
         
         bin_data = "".join(map(chr, packet))
         bin_data += data
-
-        self.tx_data += bin_data
+        
+        chunk = 1024 * 10
         
         self.log("To send: %ub" % len(bin_data), log.DEBUG)
+        while (bin_data):
+            try:
+                self.handle.send(bin_data[:chunk])
+                self.log("TX: %ub" % (len(bin_data[:chunk])), log.DEBUG)
+                self.tx_data = bin_data[chunk:]          
+            except socket.error, e:
+                self.log("TX: error %s" % (str(e)), log.DEBUG)        
 
             
 class Net(common.glue.MyThread, log.Logger):
@@ -246,9 +241,6 @@ class Net(common.glue.MyThread, log.Logger):
                         self.log(e, log.ERROR)
                 
             if self.role in ["server", "client"]:
-                #TX
-                for c in self.connections.keys():
-                    self.connections[c].work()
                 #RX
                 for c in self.connections.keys():
                     waiting = False
