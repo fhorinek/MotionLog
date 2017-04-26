@@ -97,7 +97,7 @@ class Connection(log.Logger):
             try:
                 self.handle.send(bin_data[:chunk])
                 self.log("TX: %ub" % (len(bin_data[:chunk])), log.DEBUG)
-                self.tx_data = bin_data[chunk:]          
+                bin_data = bin_data[chunk:]          
             except socket.error, e:
                 self.log("TX: error %s" % (str(e)), log.DEBUG)        
 
