@@ -90,7 +90,7 @@ class Connection(log.Logger):
         bin_data = "".join(map(chr, packet))
         bin_data += data
         
-        chunk = 1024 * 10
+        chunk = 1024
         
         self.log("To send: %ub" % len(bin_data), log.DEBUG)
         while (bin_data):
@@ -247,7 +247,7 @@ class Net(common.glue.MyThread, log.Logger):
                     try:
                         data = ""
                         while True:
-                            data += self.connections[c].handle.recv(1024 * 1024)
+                            data += self.connections[c].handle.recv(1024)
                             if not data:
                                 break
                             
@@ -267,7 +267,7 @@ class Net(common.glue.MyThread, log.Logger):
                     if data:
                         self.connections[c].parse(data)
                          
-            time.sleep(0.1)    
+#             time.sleep(0.1)    
 
                     
                     
