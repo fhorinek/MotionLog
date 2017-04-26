@@ -170,7 +170,7 @@ class probe_device():
             return None
         
         self.log_activity("update", fw)
-        return map(chr, data)
+        return "".join(map(chr, data))
         
     def parse_cfg(self, s):
         try:

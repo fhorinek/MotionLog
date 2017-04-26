@@ -12,6 +12,8 @@ DEVICE_LOG      = 0x43
 DEVICE_GET_CONF = 0x44
 DEVICE_CONF     = 0x45
 
+DUMMY           = 0xEF
+
 class Packet():
     def __init__(self, cmd, payload = []):
         self.cmd = cmd        

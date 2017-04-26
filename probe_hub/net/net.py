@@ -16,6 +16,18 @@ class Connection(log.Logger):
         self.handle = handle
         self.parent = parent
         self.log("Added", log.INFO)
+        self.tx_data = ""
+        self.tx_chunk = 1024 * 30
+
+    def work(self):
+        if (self.tx_data):
+            try:
+                self.handle.send(self.tx_data[:self.tx_chunk])
+                self.log("TX: %ub" % (len(self.tx_data[:self.tx_chunk])), log.DEBUG)
+                self.tx_data = self.tx_data[self.tx_chunk:]          
+            except socket.error, e:
+                self.log("TX: error %s" % (str(e)), log.DEBUG)
+                
 
     def __del__(self):
         self.handle.shutdown(socket.SHUT_RDWR)
@@ -88,9 +100,11 @@ class Connection(log.Logger):
         
         bin_data = "".join(map(chr, packet))
         bin_data += data
+
+        self.tx_data += bin_data
         
-        self.handle.send(bin_data)
-        self.log("TX: %ub" % (len(data) + 3), log.DEBUG)
+        self.log("To send: %ub" % len(bin_data), log.DEBUG)
+
             
 class Net(common.glue.MyThread, log.Logger):
     
@@ -230,13 +244,19 @@ class Net(common.glue.MyThread, log.Logger):
                     else:
                         self.log(e, log.ERROR)
                 
-
-                
             if self.role in ["server", "client"]:
-
+                #TX
+                for c in self.connections.keys():
+                    self.connections[c].work()
+                #RX
                 for c in self.connections.keys():
                     try:
-                        data = self.connections[c].handle.recv(1024 * 1024)
+                        data = ""
+                        while True:
+                            data += self.connections[c].handle.recv(1024 * 50)
+                            if not data:
+                                break
+                            
                     except socket.error, e:
                         err = e.args[0]
                         if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
@@ -250,7 +270,7 @@ class Net(common.glue.MyThread, log.Logger):
                     
                     self.connections[c].parse(data)
                          
-            time.sleep(0.5)    
+            time.sleep(0.1)    
 
                     
                     

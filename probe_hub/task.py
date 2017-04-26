@@ -42,6 +42,10 @@ class task(log.Logger):
                     self.devices[addr] = probe_device(addr, dev_type, self)
                     
                 self.devices[addr].update_connection(sender, rssi)
+                
+#             payload = [0] * 1024 * 1024;
+#             packet = pr.Packet(pr.DUMMY, payload)
+#             self.net.send_packet(packet, sender)   
            
         if data.cmd & pr.DEVICE_MASK:
             addr = data.payload["addr"]
