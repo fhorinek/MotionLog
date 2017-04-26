@@ -19,7 +19,7 @@ class Connection(log.Logger, threading.Thread):
         self.log("Added", log.INFO)
         self.alive = True
 
-    def __del__(self):
+    def end(self):
         self.alive = False
         
     def parse(self, data):
@@ -87,7 +87,7 @@ class Connection(log.Logger, threading.Thread):
                 if data:
                     self.parse(data)
                 else:
-                    self.alive = False
+                    self.end()
                 
             except socket.error, e:
                 err = e.args[0]
@@ -136,7 +136,7 @@ class Net(common.glue.MyThread, log.Logger):
         if client == None:
             client = "hub_%03u" % self.connection_counter
 
-        handle.setblocking(0)
+        self.handle.settimeout(1)
         self.connections[client] = Connection(handle, self, client)
         self.connections[client].start()
         
@@ -145,7 +145,7 @@ class Net(common.glue.MyThread, log.Logger):
     
     def del_connection(self, client):
         if client in self.connections:
-            del self.connections[client]
+            self.connections[client].end()
             self.internal_write(["del", client])
         
     def open(self):

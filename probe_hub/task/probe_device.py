@@ -151,7 +151,7 @@ class probe_device():
         return {"add": add, "remove": rem}    
     
     def get_fw(self, remote_fw):
-        sql = "SELECT data FROM firmware WHERE device_id = %s OR device_id IS NULL ORDER BY device_id, id DESC LIMIT 1"
+        sql = "SELECT data FROM firmware WHERE device_id = %s OR device_id IS NULL ORDER BY device_id DESC, id DESC LIMIT 1"
         data = self.parent.db.query(sql, (self.id, ))       
             
         if not data:            
