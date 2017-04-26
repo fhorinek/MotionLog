@@ -83,7 +83,7 @@ class Connection(log.Logger, threading.Thread):
     def run(self):
         while self.alive:
             try:
-                data = self.handle.recv(1024, )
+                data = self.handle.recv(1024 * 10)
                 if data:
                     self.parse(data)
                 else:
@@ -136,7 +136,7 @@ class Net(common.glue.MyThread, log.Logger):
         if client == None:
             client = "hub_%03u" % self.connection_counter
 
-        self.handle.settimeout(1)
+        handle.settimeout(1)
         self.connections[client] = Connection(handle, self, client)
         self.connections[client].start()
         
@@ -223,7 +223,6 @@ class Net(common.glue.MyThread, log.Logger):
             if self.role is "server":
                 try:
                     s, a = self.handle.accept()
-                    s.setblocking(0)
                     self.log("Connection from " + str(a), log.INFO)
                     
                     if a[0] in self.allow_list:
