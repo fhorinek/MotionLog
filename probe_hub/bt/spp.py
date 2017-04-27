@@ -177,7 +177,7 @@ class bt_socket_classic(socket):
         self.rx_mtu = 500
         self.tx_mtu = 500
         
-        self.connected()
+        self.acquired()
         
     
     def read(self):

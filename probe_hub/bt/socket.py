@@ -79,8 +79,8 @@ class socket(log.Logger):
         
         self.got_conf_from_server = False
        
-    def connected(self):
-        self.parent.connected(self.addr)
+    def acquired(self):
+        self.parent.acquired(self.addr)
        
     def alive(self):
         return self.is_alive

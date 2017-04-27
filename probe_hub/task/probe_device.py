@@ -59,7 +59,7 @@ class probe_device():
         #clean connections
         now = time()
         
-        if now > self.busy_timer and self.busy:
+        if self.busy_timer and now > self.busy_timer and self.busy:
             self.busy = False
             self.log_activity("released", "Busy lock released")
         
