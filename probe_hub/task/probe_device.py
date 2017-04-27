@@ -61,6 +61,7 @@ class probe_device():
         
         if self.busy_timer and now > self.busy_timer and self.busy:
             self.busy = False
+            self.connections = {}        
             self.log_activity("released", "Busy lock released")
         
         to_remove = [] 
@@ -80,6 +81,7 @@ class probe_device():
                 #scan done, create connection
                 best = self.find_best_route()
                 self.busy = True
+                self.busy_timer = time() + 600.0
                 
                 self.log_activity("connect", best)
                 packet = pr.Packet(pr.DEVICE_CONNECT, {"addr": self.addr, "type": self.dev_type})
@@ -206,6 +208,7 @@ class probe_device():
             self.connections = {}           
             self.busy_timer = time() + 60.0
             self.available = False
+            self.log_activity("connected", "Device connected")
         
                 
         if data.cmd == pr.DEVICE_LOG:

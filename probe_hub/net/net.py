@@ -78,7 +78,15 @@ class Connection(log.Logger, threading.Thread):
         bin_data += data
         
         self.log("TX: %ub" % len(bin_data), log.DEBUG)
-        self.handle.sendall(bin_data)
+        
+        chunk = 1024 * 5
+        
+        while not bin_data:
+            try:
+                sended = self.handle.send(bin_data[:chunk])
+                bin_data = bin_data[sended:]
+            except socket.error, e:
+                self.log("Send error: %s" % str(e), log.ERROR)
     
     def run(self):
         while self.alive:
