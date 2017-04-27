@@ -52,6 +52,10 @@ class Interface(common.glue.MyThread, log.Logger):
         self.parent.net.send_packet(packet)
         del self.sockets[addr]
      
+    def acquired(self, addr):
+        packet = pr.Packet(pr.DEVICE_ACQURED, {"addr": addr})
+        self.parent.net.send_packet(packet)
+     
     def push_log(self, addr, name, data):
         packet = pr.Packet(pr.DEVICE_LOG, {"addr": addr, "name": name, "data": data})
         self.parent.net.send_packet(packet)

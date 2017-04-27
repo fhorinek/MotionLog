@@ -120,7 +120,7 @@ def perform_scan(dev_id = 0):
         write_inquiry_mode(sock, 1)
 
     names = {}
-    for line in bluetooth.discover_devices(duration=2, lookup_names=True):
+    for line in bluetooth.discover_devices(duration=5, lookup_names=True):
         names[line[0].lower()] = line[1]
     
     devices = {}
@@ -176,6 +176,8 @@ class bt_socket_classic(socket):
         
         self.rx_mtu = 500
         self.tx_mtu = 500
+        
+        self.connected()
         
     
     def read(self):

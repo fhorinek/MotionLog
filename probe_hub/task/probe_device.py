@@ -20,6 +20,8 @@ class probe_device():
         self.id = self.get_device_id(addr)
 
         self.busy = False 
+        self.busy_timer = 0
+        
         self.available = False
         
         self.connections = {}
@@ -47,7 +49,7 @@ class probe_device():
         self.log_activity("fail", "Fail to connect, Releasing device")
         self.busy = False
         self.connections = {}
-        
+
     def update_connection(self, connection, rssi):
         if len(self.connections) == 0:
             self.available = time()
@@ -56,6 +58,10 @@ class probe_device():
     def work(self):
         #clean connections
         now = time()
+        
+        if now > self.busy_timer and self.busy:
+            self.busy = False
+            self.log_activity("released", "Busy lock released")
         
         to_remove = [] 
         for connection in self.connections:
@@ -195,6 +201,12 @@ class probe_device():
 
         if data.cmd == pr.DEVICE_FAIL:
             self.fail()
+                
+        if data.cmd == pr.DEVICE_ACQURED:
+            self.connections = {}           
+            self.busy_timer = time() + 60.0
+            self.available = False
+        
                 
         if data.cmd == pr.DEVICE_LOG:
             name = data.payload["name"]
