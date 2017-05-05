@@ -1,6 +1,8 @@
 REQ_ID = 0x00
 ANS_ID = 0x10
 
+PACKET_ACK = 0xC0
+
 SCAN_IRQ = 0x20
 
 DEVICE_MASK     = 0x40
@@ -19,4 +21,5 @@ class Packet():
     def __init__(self, cmd, payload = []):
         self.cmd = cmd        
         self.payload = payload
+        self.id = None
         

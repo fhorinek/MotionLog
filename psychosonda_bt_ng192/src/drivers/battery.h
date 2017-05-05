@@ -16,7 +16,7 @@
 #define ADC2VDC(V)	((V - 399) / 854.0)
 
 
-extern int16_t battery_adc_raw;
+extern volatile int16_t battery_adc_raw;
 extern int8_t battery_per;
 
 void battery_init();

@@ -511,10 +511,18 @@ class socket(log.Logger):
         
         
     def work(self):
-        for c in self.read(): 
+        working = False
+        
+        data = self.read()
+        if data:
+            working = True
+            
+        for c in data: 
             self.parse(c)
             
         if self.last_packet:
+            working = True
+            
             if time() - self.last_packet_tx_time > PACKET_TX_TIMEOUT:
                 self.log("TX packet timeout", log.WARN)
                 
@@ -522,16 +530,16 @@ class socket(log.Logger):
                     self.log("Max retry count reached", log.ERROR)
                     self.parent.release(self.addr)
                     self.is_alive = False
-                    return
-                
-                self.write(self.last_packet)
-                self.last_packet_tx_time = time()
-                self.last_packet_retry += 1
-                self.log(" retry %d" % self.last_packet_retry, log.INFO)
-                    
+                else:
+                    self.write(self.last_packet)
+                    self.last_packet_tx_time = time()
+                    self.last_packet_retry += 1
+                    self.log(" retry %d" % self.last_packet_retry, log.INFO)
+
+        return working
 
     def read(self):
-        return []
+        return False
     
     def write(self, data):
         pass

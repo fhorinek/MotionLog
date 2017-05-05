@@ -5,6 +5,8 @@ import net.protocol as pr
 import cfg
 import common.db
 
+import cProfile
+
 from task.probe_device import probe_device
             
 class task(log.Logger):
@@ -42,11 +44,7 @@ class task(log.Logger):
                     self.devices[addr] = probe_device(addr, dev_type, self)
                     
                 self.devices[addr].update_connection(sender, rssi)
-                
-#             payload = [0] * 1024 * 1024;
-#             packet = pr.Packet(pr.DUMMY, payload)
-#             self.net.send_packet(packet, sender)   
-           
+          
         if data.cmd & pr.DEVICE_MASK:
             addr = data.payload["addr"]
             if addr in self.devices:
@@ -59,6 +57,7 @@ class task(log.Logger):
         self.net.write(["server", cfg.bind, cfg.port, cfg.hubs])
         
         while self.running:
+            self.net.wait(0.5)
             for msg in self.net.read():
                 self.log("net cmd " + str(msg), log.DEBUG)
 
@@ -82,4 +81,6 @@ class task(log.Logger):
         self.log("Loop end", log.INFO)        
 
     
-task().boot()
+cProfile.run("task().boot()", sort="cumulative")
+
+#task().boot()

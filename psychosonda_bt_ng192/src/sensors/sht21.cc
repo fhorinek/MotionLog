@@ -63,7 +63,7 @@ void SHT21::Init(I2c * i2c, struct sht21_settings settings)
 	this->i2c = i2c;
 	this->settings = settings;
 
-	if (!(this->settings.temp_enabled && this->settings.rh_enabled))
+	if (!(this->settings.temp_enabled || this->settings.rh_enabled))
 		return;
 
 	this->Reset();

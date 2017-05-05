@@ -70,7 +70,11 @@ class Interface(common.glue.MyThread, log.Logger):
         
         try:
             while self.running:
+                working = False
+
                 for msg in self.internal_read():
+                    working = True
+                    
                     self.log("msg " + str(msg), log.DEBUG)
     
                     cmd = msg[0]
@@ -94,7 +98,12 @@ class Interface(common.glue.MyThread, log.Logger):
                     
                 for k in self.sockets.keys():
                     s = self.sockets[k] 
-                    s.work()
+                    if s.work():
+                        working = True
+                        
+                if not working:
+                    self.internal_wait(0.1)
+
         except:
             self.log("Error", log.ERROR)
             time.sleep(2)

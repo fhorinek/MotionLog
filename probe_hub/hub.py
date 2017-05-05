@@ -5,6 +5,7 @@ import common.log as log
 import net.protocol as pr
 import cfg
 import time
+import cProfile
 
 class hub(log.Logger):
     def __init__(self, label):
@@ -50,6 +51,7 @@ class hub(log.Logger):
         self.bt.write(["scan"])
         
         while self.running:
+            self.net.wait(0.5)
             for msg in self.net.read():
                 self.log("cmd " + str(msg), log.DEBUG)
 
@@ -64,6 +66,7 @@ class hub(log.Logger):
                     del self.net
                     self.start_net()
 
+            self.bt.wait(0.5)
             for msg in self.bt.read():
                 self.log("cmd " + str(msg), log.DEBUG)
 
@@ -82,7 +85,6 @@ class hub(log.Logger):
                     self.bt.start()
                     self.bt.write(["scan"])
                     
-                time.sleep(0.1)
 
      
     def boot(self):
@@ -94,4 +96,5 @@ class hub(log.Logger):
             self.end()
         self.log("Loop end", log.INFO)        
     
-hub("test hub").boot()
+
+cProfile.run("hub(\"test hub\").boot()", sort="cumulative")
