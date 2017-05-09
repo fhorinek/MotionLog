@@ -56,7 +56,7 @@ START_BYTE = 0xC0
 TIMEOUT = 1
 STREAM_OVERHEAD = 7 + 4 + 10
 
-PACKET_TX_TIMEOUT = 0.5
+PACKET_TX_TIMEOUT = 5
 PACKET_MAX_RETRY = 3
 
 class socket(log.Logger):
@@ -364,7 +364,7 @@ class socket(log.Logger):
             self.fw = "".join(map(chr, data[1:33]))
             self.bat = data[33]
             try:
-                self.bat_raw, = struct.unpack("<h","".join(map(chr, data[34:26])))
+                self.bat_raw, = struct.unpack("<h","".join(map(chr, data[34:36])))
             except:
                 self.bat_raw = 0
                 

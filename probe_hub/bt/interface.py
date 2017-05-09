@@ -45,7 +45,10 @@ class Interface(common.glue.MyThread, log.Logger):
             if addr in self.sockets:
                 del self.sockets[addr]
             
-            
+    def end(self):
+        for k in self.sockets.keys():
+            s = self.sockets[k]
+            self.release(s.addr) 
             
     def release(self, addr):
         packet = pr.Packet(pr.DEVICE_CLOSED, {"addr": addr})
@@ -96,18 +99,27 @@ class Interface(common.glue.MyThread, log.Logger):
                         fw = msg[4]
                         self.sockets[addr].config(add, rem, fw)
                     
-                for k in self.sockets.keys():
-                    s = self.sockets[k] 
-                    if s.work():
-                        working = True
+                try:
+                    s = None
+                    for k in self.sockets.keys():
+                        s = self.sockets[k] 
+                        if s.work():
+                            working = True
+                except:
+                    self.log("Socket error", log.ERROR)
+                    working = True
+                    if s:
+                        self.release(s.addr)
+                    
                         
                 if not working:
                     self.internal_wait(0.1)
 
         except:
-            self.log("Error", log.ERROR)
+            self.log("Interface error", log.ERROR)
             time.sleep(2)
             self.internal_write(["crash"])
-                
+             
+        self.end()   
         self.log("Thread end", log.INFO)
         
