@@ -97,4 +97,4 @@ class hub(log.Logger):
         self.log("Loop end", log.INFO)        
     
 
-cProfile.run("hub(\"test hub\").boot()", sort="cumulative")
+cProfile.run("hub(\"test hub\").boot()", sort="tottime")

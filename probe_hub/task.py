@@ -81,6 +81,4 @@ class task(log.Logger):
         self.log("Loop end", log.INFO)        
 
     
-cProfile.run("task().boot()", sort="cumulative")
-
-#task().boot()
+cProfile.run("task().boot()", sort="tottime")

@@ -137,7 +137,6 @@ void bt_slave_hello()
 	bt_slave_stream.Write(tmp.bytes[0]);
 	bt_slave_stream.Write(tmp.bytes[1]);
 	
-	DEBUG(" battery_adc_raw %d\n", battery_adc_raw);
 	tmp.int16 = battery_adc_raw;
 	bt_slave_stream.Write(tmp.bytes[0]);
 	bt_slave_stream.Write(tmp.bytes[1]);
