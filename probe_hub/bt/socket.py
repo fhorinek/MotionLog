@@ -364,7 +364,7 @@ class socket(log.Logger):
             self.fw = "".join(map(chr, data[1:33]))
             self.bat = data[33]
             try:
-                self.bat_raw, = struct.unpack("<h","".join(map(chr, data[34:36])))
+                self.bat_raw, = struct.unpack("<h","".join(map(chr, data[36:38])))
             except:
                 self.bat_raw = 0
                 

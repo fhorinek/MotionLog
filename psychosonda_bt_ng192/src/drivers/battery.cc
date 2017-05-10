@@ -35,7 +35,7 @@ uint8_t  battery_meas_state = BATTERY_STATE_PREPARE;
 uint16_t battery_meas_acc = 0;
 uint8_t  battery_meas_cnt = 0;
 
-volatile int16_t battery_adc_raw = 0;
+int16_t battery_adc_raw = 0;
 int8_t battery_per = 0;
 
 #define BATT_COEF_A	(0.1865671642)

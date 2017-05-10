@@ -119,7 +119,7 @@ void bt_slave_hello()
 
 	DEBUG(">bt_slave_hello\n");
 
-	bt_slave_stream.StartPacket(36);
+	bt_slave_stream.StartPacket(38);
 	bt_slave_stream.Write(CMD_ID);
 
 	for (uint8_t i = 0; i < 32; i++)
@@ -137,6 +137,7 @@ void bt_slave_hello()
 	bt_slave_stream.Write(tmp.bytes[0]);
 	bt_slave_stream.Write(tmp.bytes[1]);
 	
+	DEBUG(" battery_adc_raw %d\n", battery_adc_raw);
 	tmp.int16 = battery_adc_raw;
 	bt_slave_stream.Write(tmp.bytes[0]);
 	bt_slave_stream.Write(tmp.bytes[1]);
@@ -603,10 +604,12 @@ void bt_slave_rxpacket()
 
 		DEBUG("CMD_PUSH_PART %u, %lu\n", len, b4.uint32);
 
-
-		ret = f_lseek(&slave_file, b4.uint32);
-		if (ret != FR_OK)
-			bt_slave_fail(FAIL_FILE, ret);
+		if (f_tell(&slave_file) != b4.uint32)
+		{
+			ret = f_lseek(&slave_file, b4.uint32);
+			if (ret != FR_OK)
+				bt_slave_fail(FAIL_FILE, ret);
+		}
 
 		for (uint16_t i=0; i < len; i++)
 			slave_file_buffer[i] = bt_slave_stream.Read();
@@ -640,9 +643,12 @@ void bt_slave_rxpacket()
 
 		DEBUG("CMD_PULL_PART %u, %lu\n", len, b4.uint32);
 
-		ret = f_lseek(&slave_file, b4.uint32);
-		if (ret != FR_OK)
-			bt_slave_fail(FAIL_FILE, ret);
+		if (f_tell(&slave_file) != b4.uint32)
+		{
+			ret = f_lseek(&slave_file, b4.uint32);
+			if (ret != FR_OK)
+				bt_slave_fail(FAIL_FILE, ret);
+		}
 
 		uint16_t bw;
 		ret = f_read(&slave_file, slave_file_buffer, len, &bw);
@@ -652,14 +658,14 @@ void bt_slave_rxpacket()
 			break;
 		}
 
-		bt_slave_stream.StartPacket(3 + len);
+		bt_slave_stream.StartPacket(3 + bw);
 		bt_slave_stream.Write(CMD_PART);
 
 		b2.uint16 = bw;
 		bt_slave_stream.Write(b2.bytes[0]);
 		bt_slave_stream.Write(b2.bytes[1]);
 
-		for (uint16_t i=0; i < len; i++)
+		for (uint16_t i=0; i < bw; i++)
 			bt_slave_stream.Write(slave_file_buffer[i]);
 
 	break;
