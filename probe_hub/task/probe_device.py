@@ -4,6 +4,8 @@ import cfg
 import configparser
 import struct
 
+import urllib2
+
 from time import time
 
 import os
@@ -109,11 +111,18 @@ class probe_device():
         self.log_activity("store", name)
 
         head = data[0:13]
-        __, conf_id, __, timestamp = struct.unpack("=bIII", head)
+        __, conf_id, module_id, timestamp = struct.unpack("=bIII", head)
 
-        sql = "INSERT INTO results VALUES (NULL, %s, %s, %s, %s)"
-        self.parent.db.query(sql, (self.id, conf_id, timestamp, data))
+        sql = "INSERT INTO results VALUES (NULL, %s, %s, %s, %s, %s)"
+        self.parent.db.query(sql, (self.id, conf_id, module_id, timestamp, data))
         
+        sql = "SELECT LAST_INSERT_ID()"
+        res = self.parent.db.query(sql)
+        
+        id = res[0][0]
+        
+        #notify server
+        urllib2.urlopen(cfg.api_url + "?event=result&id=" + str(id))
         
     def write_file(self, path, data):
         f = open(path, "wb")

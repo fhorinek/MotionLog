@@ -184,13 +184,14 @@ class socket(log.Logger):
         self.step = RENAME_FW   
      
     def push_next(self):
-        done = False
         
         chunk = self.tx_mtu - STREAM_OVERHEAD
-        
-        if (chunk + self.file_pos > len(self.file_data)):
+
+        if chunk + self.file_pos > len(self.file_data):
             chunk = len(self.file_data) - self.file_pos
-            done = True
+        
+        if chunk == 0:
+            return True
         
         line = [CMD_PUSH_PART]
         line += [(chunk & 0x00FF) >> 0]
@@ -207,7 +208,7 @@ class socket(log.Logger):
         
         self.file_pos += chunk
         
-        return done        
+        return False        
      
     def pull_cfg(self):
         path = "/device.cfg" 

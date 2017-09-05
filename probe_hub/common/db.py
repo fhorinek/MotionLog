@@ -20,7 +20,10 @@ class db_conn(log.Logger):
             
     def query(self, query, params = None):
         try:
-            q = query % params
+            if params is not None:
+                q = query % params
+            else:
+                q = query
             cur = self.con.cursor()
             self.log("QUERY: %s" % q, log.DEBUG)
             cur.execute(query, params)

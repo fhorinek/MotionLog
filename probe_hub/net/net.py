@@ -89,7 +89,7 @@ class Connection(log.Logger, threading.Thread):
                             data = obj_data.payload
                             if data["error"] == False:
                                 #packet was recieved, remove
-                                self.log("ACK received, removing packet from queue: %d" % data["id"], log.DEBUG) 
+                                #self.log("ACK received, removing packet from queue: %d" % data["id"], log.DEBUG) 
                                 del self.packets_to_send[data["id"]]
                                 self.send_state = SEND_IDLE
                             else:
@@ -99,7 +99,7 @@ class Connection(log.Logger, threading.Thread):
                                 self.send_timer = 0
                         else:
                             #packed recived and parsed correctly, tell this to the other side
-                            self.log("Packet recieved: %d" % obj_data.id, log.DEBUG) 
+                            #self.log("Packet recieved: %d" % obj_data.id, log.DEBUG) 
                             if (self.last_recieved < obj_data.id):
                                 #perform action only if the packet was not recieved before
                                 self.parent.internal_write(["data", self.name, obj_data])
@@ -116,7 +116,7 @@ class Connection(log.Logger, threading.Thread):
             
             
     def send_ack(self, pid, error = False):
-        self.log("Sending ACT to: %d" % pid, log.DEBUG)        
+        #self.log("Sending ACT to: %d" % pid, log.DEBUG)        
         p = pr.Packet(pr.PACKET_ACK, {"error": error, "id": pid})
         self.ack_bin_data = self.packet_to_bin(p)
             
@@ -150,7 +150,7 @@ class Connection(log.Logger, threading.Thread):
         def send_ack_packet():
             try:
                 self.handle.send(self.ack_bin_data)
-                self.log("Sending ACK now!", log.DEBUG)
+                #self.log("Sending ACK now!", log.DEBUG)
                 self.ack_bin_data = None
             except socket.error, e:
                 self.log("Send error: %s" % str(e), log.ERROR)                
@@ -170,7 +170,7 @@ class Connection(log.Logger, threading.Thread):
             self.packet_actual = self.packets_to_send.keys()[0]
             
             packet = self.packets_to_send[self.packet_actual]
-            self.log("Sending packet: %d" % self.packet_actual, log.DEBUG)
+            #self.log("Sending packet: %d" % self.packet_actual, log.DEBUG)
             self.packet_ack = False
                 
             self.send_state = SEND_SENDING

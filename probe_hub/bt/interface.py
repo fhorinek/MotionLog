@@ -22,10 +22,10 @@ class Interface(common.glue.MyThread, log.Logger):
                 name, rssi = spp_dev[addr]
                 devices[addr] = ["spp", name, rssi]
     
-            #le_dev = le.perform_scan()
-            #for addr in le_dev:
-            #    name, rssi = le_dev[addr]
-            #    devices[addr] = ["gat", name, rssi]
+            le_dev = le.perform_scan()
+            for addr in le_dev:
+                name, rssi = le_dev[addr]
+                devices[addr] = ["gat", name, rssi]
                        
             self.internal_write(["scan", devices])
         except Exception as e:
@@ -37,6 +37,9 @@ class Interface(common.glue.MyThread, log.Logger):
         try:
             if dev_type == "spp":
                 self.sockets[addr] = spp.bt_socket_classic(addr, self)
+                
+            if dev_type == "gat":
+                self.sockets[addr] = le.bt_socket_le(addr, self)
         except Exception as e:
             self.log("Create connection failed: %s" % str(e), log.ERROR)
             
