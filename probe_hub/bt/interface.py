@@ -15,6 +15,12 @@ class Interface(common.glue.MyThread, log.Logger):
         self.parent = parent
     
     def scan(self):
+#         print self.sockets
+#         if len(self.sockets) != 0:
+#             time.sleep(2)
+#             self.internal_write(["scan", False])
+#             return
+        
         try:
             devices = {}
             spp_dev = spp.perform_scan()
@@ -22,10 +28,10 @@ class Interface(common.glue.MyThread, log.Logger):
                 name, rssi = spp_dev[addr]
                 devices[addr] = ["spp", name, rssi]
     
-            le_dev = le.perform_scan()
-            for addr in le_dev:
-                name, rssi = le_dev[addr]
-                devices[addr] = ["gat", name, rssi]
+#             le_dev = le.perform_scan()
+#             for addr in le_dev:
+#                 name, rssi = le_dev[addr]
+#                 devices[addr] = ["gat", name, rssi]
                        
             self.internal_write(["scan", devices])
         except Exception as e:
@@ -62,8 +68,8 @@ class Interface(common.glue.MyThread, log.Logger):
         packet = pr.Packet(pr.DEVICE_ACQURED, {"addr": addr})
         self.parent.net.send_packet(packet)
      
-    def push_log(self, addr, name, data):
-        packet = pr.Packet(pr.DEVICE_LOG, {"addr": addr, "name": name, "data": data})
+    def push_log(self, addr, name, data, meta):
+        packet = pr.Packet(pr.DEVICE_LOG, {"addr": addr, "name": name, "data": data, "meta": meta})
         self.parent.net.send_packet(packet)
 
     def get_conf(self, addr, conf, fw, cfg, bat):

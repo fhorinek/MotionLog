@@ -5,6 +5,10 @@
 
 //Stream control data flow form and to the slave
 Stream bt_slave_stream;
+#define stream_buffer_size 520
+uint8_t stream_buffer_memory[stream_buffer_size];
+RingBuffer stream_buffer(stream_buffer_size, stream_buffer_memory);
+
 //hander for all file operations
 FIL slave_file;
 //data buffer for file operation
@@ -133,7 +137,7 @@ void bt_slave_hello()
 
 	bt_slave_stream.Write(battery_per);
 
-	tmp.uint16 = bt_pan1322.mtu_size;
+	tmp.uint16 = bt_mtu_size;
 	bt_slave_stream.Write(tmp.bytes[0]);
 	bt_slave_stream.Write(tmp.bytes[1]);
 	
@@ -280,7 +284,7 @@ uint8_t bt_slave_meas_start(uint32_t cfg_id)
 
 	char filename[64];
 	bool meas_single_use;
-	uint32_t meas_id;
+	uint32_t module_id;
 
 	sprintf(filename, "/CONF/%08lX.CFG", cfg_id);
 	DEBUG("\nReading cfg file: %s\n", filename);
@@ -293,7 +297,7 @@ uint8_t bt_slave_meas_start(uint32_t cfg_id)
 		DEBUG("\n");
 		DEBUG("Measurement\n");
 
-		meas_id = cfg_get_int(&cfg, "meas", "id", 0);
+		module_id = cfg_get_int(&cfg, "meas", "module_id", 0);
 		meas_single_use = cfg_get_int(&cfg, "meas", "single_use", 0);
 
 		//increment file
@@ -465,7 +469,7 @@ uint8_t bt_slave_meas_start(uint32_t cfg_id)
 
 		sd_buffer->Write(1, head_data);
 		sd_buffer->Write(4, (uint8_t*) &cfg_id);
-		sd_buffer->Write(4, (uint8_t*) &meas_id);
+		sd_buffer->Write(4, (uint8_t*) &module_id);
 		sd_buffer->Write(4, (uint8_t*) &time);
 
 		slave_meas_start = task_get_ms_tick();
@@ -484,18 +488,18 @@ uint8_t bt_slave_meas_start(uint32_t cfg_id)
 
 		slave_meas = true;
 
+//		bt_module_deinit();
+
+		DEBUG("Free RAM %d\n", freeRam());
+
+		buzzer_beep(_100ms * 5, _100ms, _100ms);
+		led_anim(LED_BREATHG, 0xFF);
+
 		ads1292.Start();
 		lsm303d.Start();
 		l3gd20.Start();
 		bmp180.Start();
 		sht21.Start();
-
-		bt_module_deinit();
-
-		DEBUG("Free RAM %d", freeRam());
-
-		buzzer_beep(_100ms * 5, _100ms, _100ms);
-		led_anim(LED_BREATHG, 0xFF);
 
 		return START_MEAS_OK;
 	}
@@ -961,7 +965,7 @@ void task_bt_slave_init()
 	DEBUG("Starting BT Slave task\n");
 
 	//protocol object
-	bt_slave_stream.Init(bt_pan1322_out, 520);
+	bt_slave_stream.Init(bt_out, &stream_buffer);
 	bt_slave_stream.RegisterOnPacket(bt_slave_rxpacket);
 
 	//Storage init
@@ -1205,6 +1209,8 @@ void bt_slave_bt_irq(uint8_t * param)
 
 void task_bt_slave_irqh(uint8_t type, uint8_t * buff)
 {
+//	DEBUG("task_bt_slave_irqh %d\n", type);
+
 	int16_t fifo_buffer[16 * 3];
 
 	switch (type)
@@ -1323,4 +1329,6 @@ void task_bt_slave_irqh(uint8_t type, uint8_t * buff)
 		bt_slave_bt_irq(buff);
 	break;
 	}
+
+//	DEBUG("irq done\n");
 }

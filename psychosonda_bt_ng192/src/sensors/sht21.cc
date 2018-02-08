@@ -72,6 +72,7 @@ void SHT21::Init(I2c * i2c, struct sht21_settings settings)
 	this->meas_timer.Init(SHT_MEAS_TIMER, timer_div1024);
 
 	this->meas_timer.SetTop(SHT21_PERIOD); // 1 sec there is no point in faster odr
+	this->meas_timer.SetValue(SHT21_PERIOD - 1);
 	this->meas_timer.SetCompare(timer_A, SHT21_PERIOD / 3);
 	this->meas_timer.SetCompare(timer_B, (SHT21_PERIOD / 3) * 2);
 

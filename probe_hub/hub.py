@@ -1,10 +1,8 @@
-
 import net.net as net
 import bt.interface
 import common.log as log
 import net.protocol as pr
 import cfg
-import time
 import cProfile
 
 class hub(log.Logger):

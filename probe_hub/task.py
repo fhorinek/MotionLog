@@ -27,7 +27,7 @@ class task(log.Logger):
         self.net.write(["end"])
         
     def valid_device(self, name):
-        whitelist = ["Bioprobe", "BioprobeBLE"]
+        whitelist = ["Bioprobe", "BioprobeSPP"] #"BioprobeBLE"
         return name in whitelist 
         
     def parse_data(self, sender, data):

@@ -1,7 +1,9 @@
-from time import time
-import common.log as log
-import struct
 import os
+import struct
+from time import time
+
+import common.log as log
+
 
 #commands
 CMD_HELLO      = 0
@@ -38,11 +40,12 @@ CLOSE_LOG       = 9
 DEL_LOG         = 10
 PUSH_CONF       = 11
 CLOSE_CONF      = 12
-DEL_CONF        = 13
-PUSH_FW         = 14
-CLOSE_FW        = 15
-RENAME_FW       = 16
-WAIT_FOR_SERVER = 17
+RENAME_CONF     = 13
+DEL_CONF        = 14
+PUSH_FW         = 15
+CLOSE_FW        = 16
+RENAME_FW       = 17
+WAIT_FOR_SERVER = 18
 
 IDLE        = 0
 LENGTH_LOW  = 1
@@ -56,7 +59,7 @@ START_BYTE = 0xC0
 TIMEOUT = 1
 STREAM_OVERHEAD = 7 + 4 + 10
 
-PACKET_TX_TIMEOUT = 5
+SERVER_CONF_TIMEOUT = 5
 PACKET_MAX_RETRY = 3
 
 class socket(log.Logger):
@@ -73,11 +76,18 @@ class socket(log.Logger):
         self.rx_mtu = 64
         self.tx_mtu = 64
         
+        self.packet_timeout = 5
+        
         self.last_packet = None
         self.last_packet_tx_time = 0
         self.last_packet_retry = 0
         
         self.got_conf_from_server = False
+        
+        self.retry_cnt = 0
+        self.total_rx = 0
+        self.total_tx = 0
+        self.start_time = time()
        
     def acquired(self):
         self.parent.acquired(self.addr)
@@ -95,9 +105,18 @@ class socket(log.Logger):
             
         self.parent.release(self.addr)
         self.is_alive = False
+        
+        duration = time() - self.start_time
+        
+        self.log("Closing socket", log.INFO)
+        self.log("RX: %u" % self.total_rx, log.INFO)
+        self.log("TX: %u" % self.total_tx, log.INFO)
+        self.log("TIME: %u" % duration, log.INFO)
+        self.log("-------------------------------------", log.INFO)
        
     def reset_parser(self):
         self.parser_state = IDLE
+        self.data_len = 0
 
     def set_time(self):
         self.log("setting time", log.INFO)
@@ -136,7 +155,8 @@ class socket(log.Logger):
         self.tx_packet(line)
 
     def push_fw(self):
-        path = "/UPDATE.TMP"
+        self.log("pushing firmware", log.INFO)
+        path = "/tmp.bin"
         self.file_name = path
         self.file_data = self.new_fw
         self.file_pos = 0
@@ -153,10 +173,12 @@ class socket(log.Logger):
         else:  
             path = "/conf/" + name
              
+        self.log("pushing %s" % (path), log.INFO)             
+             
         self.file_name = path
         self.file_data = data
         self.file_pos = 0
-        self.push_file(path)      
+        self.push_file("/tmp.bin")      
         
         self.step = PUSH_CONF
 
@@ -168,11 +190,28 @@ class socket(log.Logger):
         line += map(ord, path)
         
         self.tx_packet(line)
-     
-    def rename_fw(self):
+
+    def rename_conf(self):
+        self.log("renaming tmp.bin to %s" % self.file_name, log.INFO)
         line = []
         line += [CMD_MV_FILE]
-        path = "UPDATE.TMP"
+        path = "/tmp.BIN"
+        line += [len(path)]
+        line += map(ord, path)
+        path = self.file_name
+        line += [len(path)]
+        line += map(ord, path)
+        
+        self.tx_packet(line)  
+        
+        self.step = RENAME_CONF
+
+     
+    def rename_fw(self):
+        self.log("renaming tmp.bin to UPDATE.BIN", log.INFO)
+        line = []
+        line += [CMD_MV_FILE]
+        path = "/tmp.BIN"
         line += [len(path)]
         line += map(ord, path)
         path = "UPDATE.BIN"
@@ -184,7 +223,6 @@ class socket(log.Logger):
         self.step = RENAME_FW   
      
     def push_next(self):
-        
         chunk = self.tx_mtu - STREAM_OVERHEAD
 
         if chunk + self.file_pos > len(self.file_data):
@@ -192,6 +230,8 @@ class socket(log.Logger):
         
         if chunk == 0:
             return True
+
+        self.log("pushing next %u %u" % (chunk, self.file_pos), log.INFO)
         
         line = [CMD_PUSH_PART]
         line += [(chunk & 0x00FF) >> 0]
@@ -227,6 +267,9 @@ class socket(log.Logger):
         
     def pull_file(self, path):
         self.log("pulling file %s" % path, log.INFO)
+        self.pull_start = time()
+        self.pull_index = -1;
+        
         line = []
         line += [CMD_PULL_FILE]
         line += [len(path)]
@@ -247,6 +290,8 @@ class socket(log.Logger):
         chunk = self.rx_mtu - STREAM_OVERHEAD
         file_pos = len(self.file_data)
        
+        self.log("pulling next %u %u" % (chunk, file_pos), log.INFO)
+       
         line = [CMD_PULL_PART]
         line += [chunk & 0x00FF]
         line += [(chunk & 0xFF00) >> 8]
@@ -263,7 +308,6 @@ class socket(log.Logger):
         self.step = LIST_CONF
         self.list_dir("/conf")
         self.conf = []                
-        
 
     def process_logs(self, data):
         in_dir = (data[2] << 8) | data[1]
@@ -282,6 +326,7 @@ class socket(log.Logger):
         
     def process_pull_head(self, data):
         len_s =  "".join(map(chr, data[1:]))
+        assert len(len_s) == 4, "Wrong length %s" % data
         self.file_size, = struct.unpack("<L", len_s)
 
     def pull_cfg_part(self):
@@ -294,27 +339,46 @@ class socket(log.Logger):
 
     def process_pull_data(self, data):
         length = (data[2] << 8) | data[1]
-        for i in range(length):
-            self.file_data += chr(data[3 + i])
+        pull_index = (data[4] << 8) | data[3]
+        
+        if pull_index == self.pull_index + 1:
+            self.last_rx_data = ""
+            for i in range(length):
+                self.last_rx_data += chr(data[5 + i])
+            self.file_data += self.last_rx_data
+        else:
+            self.log("Unexpected pull index %u, dropping data" % pull_index, log.WARN)
+
+        self.pull_index = pull_index            
             
         if len(self.file_data) < self.file_size:
             return False
         else:
+            delta = time() - self.pull_start
+            size = len(self.file_data)
+            speed = size / delta
+            self.log("pull done in %fsec %0.2fKb @ %0.2fbps" % (delta, size / 1024.0, speed), log.INFO)
+            self.last_rx_speed = speed
+            self.last_rx_time = delta
             return True
 
     def close_cfg_file(self):
+        self.log("Closing cfg file", log.INFO);
         self.send_cmd(CMD_CLOSE_FILE)
         self.step = CLOSE_CFG    
         
     def close_log_file(self):
+        self.log("Closing log file", log.INFO);
         self.send_cmd(CMD_CLOSE_FILE)
         self.step = CLOSE_LOG      
 
     def close_conf_file(self):
+        self.log("Closing conf file", log.INFO);
         self.send_cmd(CMD_CLOSE_FILE)
         self.step = CLOSE_CONF   
 
     def close_fw(self):
+        self.log("Closing fw file", log.INFO);
         self.send_cmd(CMD_CLOSE_FILE)
         self.step = CLOSE_FW  
 
@@ -374,6 +438,7 @@ class socket(log.Logger):
             
         if self.step == SET_TIME:
             #assuming OK
+            assert data[0] == CMD_RET_OK, "Answer is not OK %s" % data
             self.pull_cfg()
             self.cfg = None
             return 
@@ -426,6 +491,7 @@ class socket(log.Logger):
             return      
                 
         if self.step == PULL_LOG:
+            assert data[0] == CMD_RET_OK, "Answer is not OK %s" % data
             self.process_pull_head(data)
             self.pull_log_part()            
             return
@@ -438,7 +504,8 @@ class socket(log.Logger):
                 #file complete 
                 #send to server
                 name = os.path.basename(self.file_name)
-                self.parent.push_log(self.addr, name, self.file_data)
+                meta = {"speed": self.last_rx_speed, "time": self.last_rx_time}
+                self.parent.push_log(self.addr, name, self.file_data, meta)
                 #close file
                 self.close_log_file()
             return
@@ -457,6 +524,7 @@ class socket(log.Logger):
                 if self.got_conf_from_server:
                     self.configure_device()
                 else:
+                    self.server_time_start = time() 
                     self.step = WAIT_FOR_SERVER
             return
         
@@ -466,6 +534,10 @@ class socket(log.Logger):
             return
         
         if self.step == CLOSE_CONF:
+            self.rename_conf()
+            return
+        
+        if self.step == RENAME_CONF:
             if len(self.conf_add) > 0:
                 self.push_next_conf()
             else:
@@ -524,20 +596,28 @@ class socket(log.Logger):
         if self.last_packet:
             working = True
             
-            if time() - self.last_packet_tx_time > PACKET_TX_TIMEOUT:
+            if time() - self.last_packet_tx_time > self.packet_timeout:
                 self.log("TX packet timeout", log.WARN)
+                self.retry_packet()
                 
-                if self.last_packet_retry >= PACKET_MAX_RETRY:
-                    self.log("Max retry count reached", log.ERROR)
-                    self.parent.release(self.addr)
-                    self.is_alive = False
-                else:
-                    self.write(self.last_packet)
-                    self.last_packet_tx_time = time()
-                    self.last_packet_retry += 1
-                    self.log(" retry %d" % self.last_packet_retry, log.INFO)
+            if self.step == WAIT_FOR_SERVER and time() - self.server_time_start > SERVER_CONF_TIMEOUT:
+                self.log("No answer from server", log.WARN)
+                self.end()
 
         return working
+
+    def retry_packet(self):
+        if self.last_packet_retry >= PACKET_MAX_RETRY:
+            self.log("Max retry count reached. Closing.", log.ERROR)
+            self.parent.release(self.addr)
+            self.is_alive = False
+        else:
+            self.reset_parser()
+            self.write(self.last_packet)
+            self.last_packet_tx_time = time()
+            self.last_packet_retry += 1
+            self.log(" retry %d" % self.last_packet_retry, log.INFO)
+        
 
     def read(self):
         return False
@@ -546,7 +626,8 @@ class socket(log.Logger):
         pass
     
     def calc_crc(self, csum, data):
-        for i in range(0, 8):
+#         c_char = data
+        for __ in range(0, 8):
             if ((data & 0x01) ^ (csum & 0x01)):
                 csum = (csum >> 1) % 0x100 
                 csum = (csum ^ CRC_KEY) % 0x100
@@ -554,11 +635,15 @@ class socket(log.Logger):
                 csum = (csum >> 1) % 0x100
             data = (data >> 1) % 0x100
             
+#         self.log("CRC %02X %02X" % (c_char, csum), log.DEBUG)
+            
         return csum        
     
     def tx_packet(self, data):
         if (len(data) == 0):
             return
+        
+        self.total_tx += len(data)
         
         to_send = []
         
@@ -574,7 +659,7 @@ class socket(log.Logger):
             
         to_send.append(crc)
         
-        self.log("TX: " + str(to_send), log.DEBUG)
+#         self.log("TX: " + str(to_send), log.DEBUG)
         
         self.write(to_send)
         
@@ -583,9 +668,12 @@ class socket(log.Logger):
         self.last_packet_retry = 0
 
     def parse(self, c):
+        #self.log(" > %02X %d %d" % (c, self.parser_state, self.data_len), log.DEBUG)
+        self.total_rx += 1
+        
         if (self.parser_state == IDLE):
             if (c == START_BYTE):
-                self.parser_state  = LENGTH_LOW
+                self.parser_state = LENGTH_LOW
             return
             
         if (self.parser_state == LENGTH_LOW):
@@ -619,6 +707,7 @@ class socket(log.Logger):
                 #print byte
             else:
                 self.log("CRC fail %X != %X" % (self.crc, c), log.ERROR)
+                self.retry_packet()
 #                 print bytes
                                                             
             self.parser_state = IDLE        

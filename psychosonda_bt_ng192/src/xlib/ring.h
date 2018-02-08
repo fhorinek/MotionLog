@@ -20,14 +20,16 @@ public:
 	volatile uint16_t length;		//!< count of used bytes
 
 //public:
-	RingBuffer(uint16_t size);
-	~RingBuffer();
+	RingBuffer(uint16_t size, uint8_t * buffer);
 
 	void Write(uint8_t byte);
 	void Write(uint16_t len, uint8_t * data);
 
 	uint8_t Read();
 	uint16_t Length();
+
+	void Rewind(uint16_t len);
+	void Forward(uint16_t len);
 
 	void Clear();
 };

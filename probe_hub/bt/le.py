@@ -31,8 +31,13 @@ class bt_socket_le(socket, ble.DefaultDelegate):
         socket.__init__(self, addr, parent)
         ble.DefaultDelegate.__init__(self)
 
-        self.rx_mtu = 64
+        self.rx_mtu = 254
         self.tx_mtu = 64
+    
+        self.packet_timeout = 0.5
+    
+#         self.rx_mtu = 64
+#         self.tx_mtu = 64
         
         self.delegate = self
         self.sock = ble.Peripheral(addr, ble.ADDR_TYPE_RANDOM).withDelegate(self)
@@ -55,10 +60,17 @@ class bt_socket_le(socket, ble.DefaultDelegate):
                 data = self.tx_buffer[0]
                 self.tx_buffer = self.tx_buffer[1:]
                 self.sock.writeCharacteristic(0x0211, data, withResponse=True)
+                
+        self.sock.disconnect()
+
         
     def handleNotification(self, cHandle, data):
-        print "len %03d <<%s>>" % (len(data), data)
+#         print "le read %03d" % (len(data)), map(ord, data)
         self.rx_buffer += data
+
+        f = open("rx_data.bin", "a")
+        f.write(data)
+        f.close()
             
         ble.DefaultDelegate.handleNotification(self, cHandle, data)    
     
@@ -72,6 +84,6 @@ class bt_socket_le(socket, ble.DefaultDelegate):
             return []
     
     def write(self, data):
-        print "le write", data
+#         print "le write %03d" % len(data), data
         self.tx_buffer.append("".join(map(chr, data)))
         

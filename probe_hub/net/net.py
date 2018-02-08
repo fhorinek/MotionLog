@@ -330,7 +330,7 @@ class Net(common.glue.MyThread, log.Logger):
         self.running = True
         
         while self.running:
-            self.internal_wait(0.5)
+            self.internal_wait(0.1)
             for msg in self.internal_read():
                 self.log("msg " + str(msg), log.DEBUG)
                 
@@ -367,10 +367,13 @@ class Net(common.glue.MyThread, log.Logger):
                     
                     if a[0] in self.allow_list:
                         name = self.allow_list[a[0]]
+                        self.add_connection(s, name)                        
                     else:
-                        name = "hub_%s" % a[0]        
+                        self.log("Unknown hub, rejecting", log.WARN)
+                        s.shutdown(socket.SHUT_RDWR)
+                        s.close()
                         
-                    self.add_connection(s, name)
+
                 except socket.error, e:
                     err = e.args[0]
                     if err == errno.EAGAIN or err == errno.EWOULDBLOCK:

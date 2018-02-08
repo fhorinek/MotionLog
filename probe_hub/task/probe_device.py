@@ -1,4 +1,3 @@
-import common.log as log
 import net.protocol as pr
 import cfg
 import configparser
@@ -9,6 +8,9 @@ import urllib2
 from time import time
 
 import os
+
+from subprocess import Popen, PIPE
+
 
 PROBE_TTL = 60.0 * 5
 PROBE_WAIT = 0
@@ -32,7 +34,7 @@ class probe_device():
         sql = "SELECT id from devices WHERE mac = %s"
         data = self.parent.db.query(sql, (addr, ))
         if len(data) == 0:
-            sql = "INSERT INTO devices VALUES (NULL, %s, '', 0)" 
+            sql = "INSERT INTO devices (id, mac, alias, conf_version) VALUES (NULL, %s, '', 0)" 
             data = self.parent.db.query(sql, (addr, ))
             return self.get_device_id(addr)
         
@@ -107,11 +109,34 @@ class probe_device():
         except:
             pass    
     
-    def save_log(self, name, data):
-        self.log_activity("store", name)
+    def decompress(self, data):
+        cmd = [cfg.heatshrink_bin, "-d", "-w 10"]
+        p = Popen(cmd, stdin=PIPE, stdout=PIPE)
+        data_out, __ = p.communicate(data)
+        
+        return data_out
+    
+    def save_log(self, name, data, meta):
+        self.log_activity("store", "%s (%0.2fkB, %0.2fkBps, %0.1f s)" % (name, len(data) / 1024.0, meta["speed"], meta["time"]))
 
-        head = data[0:13]
-        __, conf_id, module_id, timestamp = struct.unpack("=bIII", head)
+        
+        if (name[-3:] == "HTS"):
+            try:
+                data = self.decompress(data)
+            except:
+                self.log_activity("fail", "Unable to decompress the data")
+                error = True
+
+        try:
+            head = data[0:13]
+            __, conf_id, module_id, timestamp = struct.unpack("=bIII", head)
+            error = False
+        except:
+            self.log_activity("fail", "Invalid header structure")
+            conf_id = -1
+            module_id = -1
+            timestamp = -1
+            error = True
 
         sql = "INSERT INTO results VALUES (NULL, %s, %s, %s, %s, %s)"
         self.parent.db.query(sql, (self.id, conf_id, module_id, timestamp, data))
@@ -119,10 +144,11 @@ class probe_device():
         sql = "SELECT LAST_INSERT_ID()"
         res = self.parent.db.query(sql)
         
-        id = res[0][0]
+        log_id = res[0][0]
         
-        #notify server
-        urllib2.urlopen(cfg.api_url + "?event=result&id=" + str(id))
+        if not error:
+            #notify server
+            urllib2.urlopen(cfg.api_url + "?event=result&id=" + str(log_id))
         
     def write_file(self, path, data):
         f = open(path, "wb")
@@ -195,7 +221,7 @@ class probe_device():
             u = unicode(s, "utf-8")
             c.read_string(u)
             return c
-        finally:
+        except:
             pass
         
         return None
@@ -223,8 +249,9 @@ class probe_device():
         if data.cmd == pr.DEVICE_LOG:
             name = data.payload["name"]
             text = data.payload["data"]
+            meta = data.payload["meta"]
             
-            self.save_log(name, text)
+            self.save_log(name, text, meta)
             
         if data.cmd == pr.DEVICE_GET_CONF:
             conf = data.payload["conf"]

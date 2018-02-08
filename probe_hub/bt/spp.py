@@ -6,6 +6,9 @@ import bluetooth
 from bluetooth.btcommon import RFCOMM
 from socket import socket
 
+WORK_DEVICE = 0
+SCAN_DEVICE = 0
+
 def read_inquiry_mode(sock):
     """returns the current mode, or -1 on failure"""
     # save current filter
@@ -85,7 +88,7 @@ def device_inquiry_with_with_rssi(sock):
     done = False
     while not done:
         pkt = sock.recv(255)
-        ptype, event, plen = struct.unpack("BBB", pkt[:3])
+        __, event, __ = struct.unpack("BBB", pkt[:3])
         if event == bluez.EVT_INQUIRY_RESULT_WITH_RSSI:
             pkt = pkt[3:]
             nrsp = bluetooth.get_byte(pkt[0])
@@ -97,7 +100,7 @@ def device_inquiry_with_with_rssi(sock):
         elif event == bluez.EVT_INQUIRY_COMPLETE:
             done = True
         elif event == bluez.EVT_CMD_STATUS:
-            status, ncmd, opcode = struct.unpack("BBH", pkt[3:7])
+            status, __, __ = struct.unpack("BBH", pkt[3:7])
             if status != 0:
                 done = True
         elif event == bluez.EVT_INQUIRY_RESULT:
@@ -112,7 +115,7 @@ def device_inquiry_with_with_rssi(sock):
 
     return results
 
-def perform_scan(dev_id = 0):
+def perform_scan(dev_id = SCAN_DEVICE):
     sock = bluez.hci_open_dev(dev_id)
     mode = read_inquiry_mode(sock)
 
@@ -120,7 +123,7 @@ def perform_scan(dev_id = 0):
         write_inquiry_mode(sock, 1)
 
     names = {}
-    for line in bluetooth.discover_devices(duration=5, lookup_names=True):
+    for line in bluetooth.discover_devices(duration=5, lookup_names=True, device_id = dev_id):
         names[line[0].lower()] = line[1]
     
     devices = {}
@@ -163,26 +166,29 @@ def get_spp_port(addr):
         if rfcomm and uuid:
             return services[0]["port"]
     else:
-        return False
+        return 5
         
         
 class bt_socket_classic(socket):
     def __init__(self, addr, parent):
         socket.__init__(self, addr, parent)
+        
         self.sock = bluetooth.BluetoothSocket(RFCOMM)
         conn = addr, get_spp_port(addr)
         self.sock.connect(conn)
         self.sock.setblocking(0)
         
-        self.rx_mtu = 500
-        self.tx_mtu = 500
+        self.rx_mtu = 548
+        self.tx_mtu = 60
+        
+        self.packet_timeout = 30
         
         self.acquired()
         
     
     def read(self):
         try:
-            data = self.sock.recv(1024)
+            data = self.sock.recv(1)
             return map(ord, data)
         except:
             #print "no data"

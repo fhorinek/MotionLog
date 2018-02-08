@@ -3,15 +3,6 @@
 #include "../drivers/uart.h"
 #include "../bluetooth/bt.h"
 
-/**
- * Initialize Stream object using standard buffer size
- *
- * \param output StdOut FILE for buffer output
- */
-void Stream::Init(FILE * output)
-{
-	this->Init(output, BUFFER_SIZE);
-}
 
 /**
  * Initialize Stream object
@@ -20,7 +11,7 @@ void Stream::Init(FILE * output)
  * \param buffer_length Buffer size
  *
  */
-void Stream::Init(FILE * output, uint16_t buffer_length)
+void Stream::Init(FILE * output, RingBuffer * buffer)
 {
 	this->output = output;
 
@@ -31,7 +22,7 @@ void Stream::Init(FILE * output, uint16_t buffer_length)
 	this->tx_crc = 0x00;
 	this->rx_crc = 0x00;
 
-	this->buffer = new RingBuffer(buffer_length);
+	this->buffer = buffer;
 }
 
 /**
@@ -52,7 +43,6 @@ void Stream::Write(uint8_t data)
 	if (this->tx_length == 0)
 	{
 		fputc(this->tx_crc, this->output);
-		bt_pan1322.StreamTail();
 	}
 }
 
@@ -63,7 +53,7 @@ void Stream::Write(uint8_t data)
  */
 void Stream::Decode(uint8_t data)
 {
-//	DEBUG(">%d %d\n", data, this->rx_next);
+	DEBUG(">%d %d\n", data, this->rx_next);
 
 	switch(this->rx_next)
 	{
@@ -153,8 +143,6 @@ void Stream::StartPacket(uint16_t length)
 {
 	while(this->tx_length > 0)
 		this->Write(0x00);
-
-	bt_pan1322.StreamHead(4 + length);
 
 	//header
 	fputc(xlib_stream_startbyte ,this->output);

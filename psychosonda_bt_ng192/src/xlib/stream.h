@@ -54,7 +54,7 @@ private:
 
 public:
 	void Init(FILE * output);
-	void Init(FILE * output, uint16_t buffer_length);
+	void Init(FILE * output, RingBuffer * buffer);
 
 	void StartPacket(uint16_t length);
 	void Write(uint8_t data);

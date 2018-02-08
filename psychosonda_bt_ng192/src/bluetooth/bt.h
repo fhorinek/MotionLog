@@ -8,19 +8,10 @@
 #ifndef BT_H_
 #define BT_H_
 
-#include "../common.h"
+#include "../../common.h"
 #include "../drivers/uart.h"
-#include "../tasks/tasks.h"
-
-//#include "btcomm.h"
-#include "pan_lite.h"
-
-#define DEBUG_OUTPUT rgui
-#include "remotegui.h"
-
-#define BT_MOD_STATE_OFF	0
-#define BT_MOD_STATE_INIT	1
-#define BT_MOD_STATE_OK		2
+#include "../../tasks/tasks.h"
+#include "../xlib/ring.h"
 
 #define BT_IRQ_CONNECTED	0
 #define BT_IRQ_DISCONNECTED	1
@@ -33,17 +24,35 @@
 #define BT_IRQ_RESET		8
 #define BT_IRQ_DATA			9
 
+#define BT_PAN1322	0
+#define BT_PAN1026	1
+#define BT_UNKNOWN	0xFF
+
 void bt_init();
+void bt_stop();
+void bt_step();
+
+void bt_module_reset();
 void bt_module_init();
 void bt_module_deinit();
-void bt_module_reset();
-void bt_step();
 bool bt_device_active();
-void bt_ms_irq();
 
+void bt_send(char * str);
+void bt_send(uint16_t len, uint8_t * data);
 void bt_irqh(uint8_t type, uint8_t * buf);
 
-extern pan1322 bt_pan1322;
-extern FILE * bt_pan1322_out;
+bool bt_ready();
+uint8_t bt_get_module_type();
+
+extern RingBuffer bt_output;
+
+#define BT_MOD_STATE_OFF	0
+#define BT_MOD_STATE_INIT	1
+#define BT_MOD_STATE_OK		2
+
+extern volatile uint8_t bt_module_state;
+extern FILE * bt_out;
+
+extern uint16_t bt_mtu_size;
 
 #endif /* BT_H_ */

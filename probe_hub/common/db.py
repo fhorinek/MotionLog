@@ -1,6 +1,8 @@
 import mysql.connector
 import cfg
 import common.log as log
+from mysql.connector import errors
+import time
 
 
 class db_conn(log.Logger):
@@ -33,8 +35,16 @@ class db_conn(log.Logger):
                 data = None
                 
             self.con.commit()
+        except errors.OperationalError, e:
+            self.log("OperationalError %s" % e, log.ERROR)
+            
+            self.connect()
+            data = self.query(query, params)
+            time.sleep(1)
+            
         except:
             self.log("Error executing query \n>>%s<<" % q, log.ERROR)
+            
             return None
         
         return data
