@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import common.log as log
 
 import net.net as net

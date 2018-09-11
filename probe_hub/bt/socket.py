@@ -3,6 +3,7 @@ import struct
 from time import time
 
 import common.log as log
+import datetime
 
 
 #commands
@@ -120,8 +121,9 @@ class socket(log.Logger):
 
     def set_time(self):
         self.log("setting time", log.INFO)
-        #XXX this is hack FIXME
-        t = int(time() + (2 * 60 * 60))
+        #Local time in seconds (epoch like)
+        t = int((datetime.datetime.now() - datetime.datetime(1970,1,1)).total_seconds())
+
         line = [CMD_SET_TIME]
         line += map(ord, struct.pack("<L", t))
         
