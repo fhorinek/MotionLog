@@ -4,6 +4,10 @@ from time import time
 
 import common.log as log
 import datetime
+from bt.le import bt_inerface_le
+from bt.spp import bt_interface_classic
+from bluetooth.btcommon import BluetoothError
+import threading
 
 
 #commands
@@ -58,6 +62,9 @@ CRC_KEY = 0xD5 #CRC-8
 START_BYTE = 0xC0
 
 TIMEOUT = 1
+
+DEVICE_FREEZE = 60
+
 STREAM_OVERHEAD = 7 + 4 + 10
 
 SERVER_CONF_TIMEOUT = 5
@@ -74,8 +81,12 @@ class socket(log.Logger):
         self.step = WAIT_HELLO
         self.is_alive = True
         
+        self.reconnecting = False
+        
         self.rx_mtu = 64
         self.tx_mtu = 64
+        
+        self.no_data_since = time()
         
         self.packet_timeout = 5
         
@@ -89,7 +100,63 @@ class socket(log.Logger):
         self.total_rx = 0
         self.total_tx = 0
         self.start_time = time()
+        
+        self.create_interface_ble()
+        self.send_cmd(CMD_HELLO)
+        self.acquired()        
        
+    def create_interface_ble(self):
+        self.rx_mtu = 254
+        self.tx_mtu = 64
+        self.spp_mode = False
+        
+        self.interface = bt_inerface_le(self.addr, self.rx_mtu, self.parent.work_iface)
+        self.log("Connected", log.INFO)
+
+        self.packet_timeout = 0.5
+
+    def switch_to_interface_spp(self, cb):
+        if self.spp_mode:
+            cb()
+            return
+
+        self.log("Switching to SPP", log.INFO)
+        
+        self.reconnecting = True
+        self.spp_mode = True  
+        self.switch_to_interface_spp_worker(cb)
+#         therad = threading.Thread(target=self.switch_to_interface_spp_worker, args=(cb,))
+#         therad.start()
+        
+    def switch_to_interface_spp_worker(self, cb):
+        start = time()
+        #kill ble interface
+        self.interface.end()
+        self.reset_parser()
+
+        retry_cnt = 3
+        for i in range(retry_cnt):
+            try:
+                new_interface = bt_interface_classic(self.addr)
+            except BluetoothError as err:
+                if i == retry_cnt - 1:
+                    raise err
+                else:
+                    self.log("Error. Retry %u" % (i + 1), log.WARN)
+                    continue
+            break
+        
+        self.interface = new_interface        
+        
+        self.rx_mtu = 548
+        self.tx_mtu = 60
+
+
+        self.packet_timeout = 30
+        self.log("Connected in %0.1fs" % (time() - start), log.INFO)
+        self.reconnecting = False
+        cb()
+        
     def acquired(self):
         self.parent.acquired(self.addr)
        
@@ -105,7 +172,7 @@ class socket(log.Logger):
             self.log("Powering off", log.INFO)
             
         self.parent.release(self.addr)
-        self.is_alive = False
+        self.interface.is_alive = False
         
         duration = time() - self.start_time
         
@@ -157,6 +224,9 @@ class socket(log.Logger):
         self.tx_packet(line)
 
     def push_fw(self):
+        self.switch_to_interface_spp(self.push_fw_cb)
+        
+    def push_fw_cb(self):
         self.log("pushing firmware", log.INFO)
         path = "/tmp.bin"
         self.file_name = path
@@ -233,7 +303,8 @@ class socket(log.Logger):
         if chunk == 0:
             return True
 
-        self.log("pushing next %u %u" % (chunk, self.file_pos), log.INFO)
+        pos = min(1, (float(self.file_pos + chunk) / len(self.file_data))) * 100.0
+        self.log("pushing next %u %u %u%%" % (chunk, self.file_pos, pos), log.INFO)
         
         line = [CMD_PUSH_PART]
         line += [(chunk & 0x00FF) >> 0]
@@ -259,7 +330,11 @@ class socket(log.Logger):
         self.pull_file(path)    
         self.step = PULL_CFG
      
+     
     def pull_next_log(self):
+        self.switch_to_interface_spp(self.pull_next_log_cb)   
+     
+    def pull_next_log_cb(self):
         path = "/logs/" + self.logs.pop()
         self.file_name = path
         self.file_data = ""  
@@ -291,8 +366,13 @@ class socket(log.Logger):
     def pull_next(self):
         chunk = self.rx_mtu - STREAM_OVERHEAD
         file_pos = len(self.file_data)
-       
-        self.log("pulling next %u %u" % (chunk, file_pos), log.INFO)
+        
+        if self.file_size == 0:
+            pos = 0
+        else:
+            pos = min(1, (float(file_pos + chunk) / self.file_size)) * 100.0
+            
+        self.log("pulling next %u %u %u%%" % (chunk, file_pos, pos), log.INFO)
        
         line = [CMD_PULL_PART]
         line += [chunk & 0x00FF]
@@ -425,7 +505,8 @@ class socket(log.Logger):
         self.end()        
         
     def rx_packet(self, data):
-        self.log("RX: " + str(data), log.DEBUG)
+#         self.log("RX: " + str(data) , log.DEBUG)
+#         self.log("self.step: " + str(self.step) , log.DEBUG)
 
         if self.step == WAIT_HELLO:
             self.fw = "".join(map(chr, data[1:33]))
@@ -481,9 +562,9 @@ class socket(log.Logger):
             if self.process_logs(data):
                 self.log("Listing logs: %s" % str(self.logs), log.INFO)
                 if len(self.logs) > 0:
-                    #download logs from device
-                    self.pull_next_log()
-                    
+                    self.pull_next_log()                    
+#                     #download logs from device
+#                     self.pull_next_log()
                 else:
                     #configure device
                     if self.got_conf_from_server:
@@ -584,19 +665,20 @@ class socket(log.Logger):
         if self.step == WAIT_FOR_SERVER:
             self.configure_device()
         
-        
     def work(self):
         working = False
-        
-        data = self.read()
-        if data:
-            working = True
+
+        if not self.reconnecting:
+            data = self.read()
+            if data:
+                working = True
             
-        for c in data: 
-            self.parse(c)
+            for c in data: 
+                self.parse(c)
             
         if self.last_packet:
             working = True
+            self.no_data_since = time()
             
             if time() - self.last_packet_tx_time > self.packet_timeout:
                 self.log("TX packet timeout", log.WARN)
@@ -605,6 +687,10 @@ class socket(log.Logger):
             if self.step == WAIT_FOR_SERVER and time() - self.server_time_start > SERVER_CONF_TIMEOUT:
                 self.log("No answer from server", log.WARN)
                 self.end()
+
+        if time() - self.no_data_since > DEVICE_FREEZE:
+            self.log("No comunication timeout", log.WARN)
+            self.end()            
 
         return working
 
@@ -622,10 +708,10 @@ class socket(log.Logger):
         
 
     def read(self):
-        return False
+        return self.interface.read()
     
     def write(self, data):
-        pass
+        self.interface.write(data)
     
     def calc_crc(self, csum, data):
 #         c_char = data

@@ -4,7 +4,6 @@ import struct
 import bluetooth._bluetooth as bluez
 import bluetooth
 from bluetooth.btcommon import RFCOMM
-from socket import socket
 
 WORK_DEVICE = 0
 SCAN_DEVICE = 0
@@ -169,22 +168,12 @@ def get_spp_port(addr):
         return 5
         
         
-class bt_socket_classic(socket):
-    def __init__(self, addr, parent):
-        socket.__init__(self, addr, parent)
-        
+class bt_interface_classic():
+    def __init__(self, addr):
         self.sock = bluetooth.BluetoothSocket(RFCOMM)
         conn = addr, get_spp_port(addr)
         self.sock.connect(conn)
         self.sock.setblocking(0)
-        
-        self.rx_mtu = 548
-        self.tx_mtu = 60
-        
-        self.packet_timeout = 30
-        
-        self.acquired()
-        
     
     def read(self):
         try:

@@ -19,7 +19,7 @@ SEND_TIMEOUT = 10.0
 class Connection(log.Logger, threading.Thread):
     def __init__(self, handle, parent, name):
         threading.Thread.__init__(self)
-        log.Logger.__init__(self, "Unknown Connection")
+        log.Logger.__init__(self, "Unknown Connection", level=log.INFO)
         self.parser_state = 0
         self.data = []
         self.len = 0
@@ -44,6 +44,8 @@ class Connection(log.Logger, threading.Thread):
         self.alive = False
         
     def parse(self, data):
+        self.ack_bin_data = ""
+        
         self.log("RX: %ub" % len(data), log.DEBUG)
         for c in data:
             n = ord(c)
@@ -89,8 +91,9 @@ class Connection(log.Logger, threading.Thread):
                             data = obj_data.payload
                             if data["error"] == False:
                                 #packet was recieved, remove
-                                #self.log("ACK received, removing packet from queue: %d" % data["id"], log.DEBUG) 
-                                del self.packets_to_send[data["id"]]
+                                self.log("ACK received, removing packet from queue: %d" % data["id"], log.DEBUG) 
+                                if data["id"] in self.packets_to_send:
+                                    del self.packets_to_send[data["id"]]
                                 self.send_state = SEND_IDLE
                             else:
                                 #error on the other side, resend the packet
@@ -99,7 +102,7 @@ class Connection(log.Logger, threading.Thread):
                                 self.send_timer = 0
                         else:
                             #packed recived and parsed correctly, tell this to the other side
-                            #self.log("Packet recieved: %d" % obj_data.id, log.DEBUG) 
+                            self.log("Packet recieved: %d" % obj_data.id, log.DEBUG) 
                             if (self.last_recieved < obj_data.id):
                                 #perform action only if the packet was not recieved before
                                 self.parent.internal_write(["data", self.name, obj_data])
@@ -116,9 +119,9 @@ class Connection(log.Logger, threading.Thread):
             
             
     def send_ack(self, pid, error = False):
-        #self.log("Sending ACT to: %d" % pid, log.DEBUG)        
+        self.log("Sending ACT to: %d" % pid, log.DEBUG)        
         p = pr.Packet(pr.PACKET_ACK, {"error": error, "id": pid})
-        self.ack_bin_data = self.packet_to_bin(p)
+        self.ack_bin_data += self.packet_to_bin(p)
             
     def send(self, data):
         data.id = self.packet_counter
@@ -150,7 +153,7 @@ class Connection(log.Logger, threading.Thread):
         def send_ack_packet():
             try:
                 self.handle.send(self.ack_bin_data)
-                #self.log("Sending ACK now!", log.DEBUG)
+                self.log("Sending ACK now!", log.DEBUG)
                 self.ack_bin_data = None
             except socket.error, e:
                 self.log("Send error: %s" % str(e), log.ERROR)                
@@ -167,14 +170,16 @@ class Connection(log.Logger, threading.Thread):
                 return False
         
         if self.send_state == SEND_HAVE_DATA:
-            self.packet_actual = self.packets_to_send.keys()[0]
-            
-            packet = self.packets_to_send[self.packet_actual]
-            #self.log("Sending packet: %d" % self.packet_actual, log.DEBUG)
-            self.packet_ack = False
+            self.bin_data = ""
+            for i in range(len(self.packets_to_send)):
+                self.packet_actual = self.packets_to_send.keys()[i]
                 
-            self.send_state = SEND_SENDING
-            self.bin_data = self.packet_to_bin(packet)
+                packet = self.packets_to_send[self.packet_actual]
+                self.log("Sending packet: %d" % self.packet_actual, log.DEBUG)
+                self.packet_ack = False
+                    
+                self.send_state = SEND_SENDING
+                self.bin_data += self.packet_to_bin(packet)
             
             return True
             

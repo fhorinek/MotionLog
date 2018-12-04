@@ -1,10 +1,14 @@
+import cfg
+
 import le
-import spp
 import common.glue
 import common.log as log
-import threading
 import net.protocol as pr
-import time
+import socket
+from time import sleep, time
+
+SCAN_PERIOD = 5
+MAX_DEVICES = 4
 
 class Interface(common.glue.MyThread, log.Logger):
     def __init__(self, parent):
@@ -13,46 +17,58 @@ class Interface(common.glue.MyThread, log.Logger):
         self.log("Init done", log.INFO)
         self.sockets = {}
         self.parent = parent
+        self.work_iface = 0
+        self.scan_iface = 0
+        self.next_scan = 0
+        
+        self.to_connect = []
+    
+    def valid_device(self, name):
+        return name in cfg.whitelist 
     
     def scan(self):
-#         print self.sockets
-#         if len(self.sockets) != 0:
-#             time.sleep(2)
-#             self.internal_write(["scan", False])
-#             return
-        
         try:
             devices = {}
-            spp_dev = spp.perform_scan()
-            for addr in spp_dev:
-                name, rssi = spp_dev[addr]
-                devices[addr] = ["spp", name, rssi]
+            if len(self.sockets) > 0:
+                sleep(0.5)
     
-#             le_dev = le.perform_scan()
-#             for addr in le_dev:
-#                 name, rssi = le_dev[addr]
-#                 devices[addr] = ["gat", name, rssi]
-                       
-            self.internal_write(["scan", devices])
+            le_dev = le.perform_scan(self.scan_iface)
+            
+            for addr in le_dev:
+                name, rssi = le_dev[addr]
+                if self.valid_device(name):
+                    devices[addr] = [name, rssi]
+                    self.log(" %s %s %d" % (addr, name, rssi), log.INFO)
+                    
+            if len(devices) > 0:
+                self.internal_write(["scan", devices])
+                
         except Exception as e:
             self.log("Scan failed: %s" % str(e), log.ERROR)
-            self.internal_write(["scan", False])
-        
-        
-    def create_connection(self, addr, dev_type):
-        try:
-            if dev_type == "spp":
-                self.sockets[addr] = spp.bt_socket_classic(addr, self)
-                
-            if dev_type == "gat":
-                self.sockets[addr] = le.bt_socket_le(addr, self)
-        except Exception as e:
-            self.log("Create connection failed: %s" % str(e), log.ERROR)
+
             
+    def have_device(self, addr):
+        return addr in self.sockets
+        
+    def can_create_socket(self):
+        return len(self.sockets) < MAX_DEVICES
+        
+    def create_connection(self, addr):
+        if self.can_create_socket():
+            try:
+                self.sockets[addr] = socket.socket(addr, self)
+                    
+            except Exception as e:
+                self.log("Create connection failed: %s" % str(e), log.ERROR)
+                
+                packet = pr.Packet(pr.DEVICE_FAIL, {"addr": addr})
+                self.parent.net.send_packet(packet)
+                if addr in self.sockets:
+                    del self.sockets[addr]
+        else:
+            self.log("Too many connections", log.WARN)
             packet = pr.Packet(pr.DEVICE_FAIL, {"addr": addr})
-            self.parent.net.send_packet(packet)
-            if addr in self.sockets:
-                del self.sockets[addr]
+            self.parent.net.send_packet(packet)            
             
     def end(self):
         for k in self.sockets.keys():
@@ -93,13 +109,12 @@ class Interface(common.glue.MyThread, log.Logger):
                     
                     if cmd == "end":
                         self.running = False
-    
-                    if cmd == "scan":
-                        sthread = threading.Thread(target=self.scan, args=())
-                        sthread.start()
                         
                     if cmd == "connect":
-                        self.create_connection(msg[1], msg[2])
+                        addr = msg[1]
+                        
+                        if addr not in self.to_connect:
+                            self.to_connect.append(addr)
                         
                     if cmd == "config":
                         addr = msg[1]
@@ -107,6 +122,19 @@ class Interface(common.glue.MyThread, log.Logger):
                         rem = msg[3]
                         fw = msg[4]
                         self.sockets[addr].config(add, rem, fw)
+                    
+                #create connections before scan
+                for addr in self.to_connect:
+                    self.create_connection(addr)
+                  
+                self.to_connect = []
+
+                #scaning during comunication will pause the communication
+#                 if len(self.sockets) == 0:
+                if self.next_scan < time() or len(self.sockets) == 0:
+                    if self.can_create_socket():
+                        self.scan()
+                        self.next_scan = time() + SCAN_PERIOD
                     
                 try:
                     s = None
@@ -126,7 +154,7 @@ class Interface(common.glue.MyThread, log.Logger):
 
         except:
             self.log("Interface error", log.ERROR)
-            time.sleep(2)
+            sleep(2)
             self.internal_write(["crash"])
              
         self.end()   

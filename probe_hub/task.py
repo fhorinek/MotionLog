@@ -29,21 +29,21 @@ class task(log.Logger):
         self.net.write(["end"])
         
     def valid_device(self, name):
-        whitelist = ["Bioprobe", "BioprobeSPP"] #"BioprobeBLE"
+        whitelist = ["BioprobeBLE"] #"BioprobeSPP", "Bioprobe"
         return name in whitelist 
         
     def parse_data(self, sender, data):
-        self.log("DATA from " + sender + " " + str(data.cmd) + " " + str(data.payload), log.DEBUG)
+        #self.log("DATA from " + sender + " " + str(data.cmd) + " " + str(data.payload), log.DEBUG)
         
         if data.cmd == pr.SCAN_IRQ:
             for addr in data.payload:
-                dev_type, name, rssi = data.payload[addr]
+                name, rssi = data.payload[addr]
                 
                 if not self.valid_device(name):
                     continue
                  
                 if addr not in self.devices:
-                    self.devices[addr] = probe_device(addr, dev_type, self)
+                    self.devices[addr] = probe_device(addr, self)
                     
                 self.devices[addr].update_connection(sender, rssi)
           
@@ -59,7 +59,7 @@ class task(log.Logger):
         self.net.write(["server", cfg.bind, cfg.port, cfg.hubs])
         
         while self.running:
-            self.net.wait(0.5)
+            self.net.wait(0.1)
             for msg in self.net.read():
                 self.log("net cmd " + str(msg), log.DEBUG)
 
@@ -82,5 +82,5 @@ class task(log.Logger):
             self.end()
         self.log("Loop end", log.INFO)        
 
-    
-cProfile.run("task().boot()", sort="tottime")
+task().boot()    
+#cProfile.run("task().boot()", sort="tottime")

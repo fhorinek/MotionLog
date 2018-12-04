@@ -16,9 +16,8 @@ PROBE_TTL = 60.0 * 5
 PROBE_WAIT = 0
 
 class probe_device():
-    def __init__(self, addr, dev_type, parent):
+    def __init__(self, addr, parent):
         self.addr = addr
-        self.dev_type = dev_type
         self.parent = parent
         
         self.id = self.get_device_id(addr)
@@ -88,7 +87,7 @@ class probe_device():
                 self.busy_timer = time() + 600.0
                 
                 self.log_activity("connect", best)
-                packet = pr.Packet(pr.DEVICE_CONNECT, {"addr": self.addr, "type": self.dev_type})
+                packet = pr.Packet(pr.DEVICE_CONNECT, {"addr": self.addr})
                 self.parent.net.send_packet(packet, best)
             
             
@@ -128,8 +127,8 @@ class probe_device():
                 error = True
 
         try:
-            head = data[0:13]
-            __, conf_id, module_id, timestamp = struct.unpack("=bIII", head)
+            head = data[0:14]
+            __, __, conf_id, module_id, timestamp = struct.unpack("=bbIII", head)
             error = False
         except:
             self.log_activity("fail", "Invalid header structure")
@@ -209,7 +208,7 @@ class probe_device():
                 fw += chr(c)
                 
         
-        if fw == remote_fw:
+        if fw <= remote_fw:
             return None
         
         self.log_activity("update", fw)

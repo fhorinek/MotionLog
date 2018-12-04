@@ -1,18 +1,17 @@
 import bluepy.btle as ble
-from socket import socket
 import threading
 import struct
 
-def perform_scan():
-    a = ble.Scanner()
-    res = a.scan(2)
-
+def perform_scan(iface):
+    a = ble.Scanner(iface)
+    res = a.scan(0.2)
     
     devices = {}
     for line in res:
         addr = str(line.addr)
         name = line.getValueText(9)
         rssi = line.rssi
+        
         if addr in devices:
             devices[addr][1].append(rssi)
         else:
@@ -26,32 +25,27 @@ def perform_scan():
         
     return result
 
-class bt_socket_le(socket, ble.DefaultDelegate):
-    def __init__(self, addr, parent):
-        socket.__init__(self, addr, parent)
+class bt_inerface_le(ble.DefaultDelegate):
+    
+    def __init__(self, addr, rx_mtu, iface):
         ble.DefaultDelegate.__init__(self)
-
-        self.rx_mtu = 254
-        self.tx_mtu = 64
-    
-        self.packet_timeout = 0.5
-    
-#         self.rx_mtu = 64
-#         self.tx_mtu = 64
-        
-        self.delegate = self
-        self.sock = ble.Peripheral(addr, ble.ADDR_TYPE_RANDOM).withDelegate(self)
-        #set MTU
-        self.sock.setMTU(self.rx_mtu)
-        #enable notification
-        self.sock.writeCharacteristic(0x0212, struct.pack('<h', 0x001), withResponse=True)
 
         self.rx_buffer = ""
         self.tx_buffer = []
         
-        self.acquired()
+        self.delegate = self
+        self.sock = ble.Peripheral(addr, ble.ADDR_TYPE_RANDOM, iface).withDelegate(self)
+        #set MTU
+        self.sock.setMTU(rx_mtu)
+        #enable notification
+        self.sock.writeCharacteristic(0x0212, struct.pack('<h', 0x001), withResponse=True)
+
+        self.is_alive = True
         
         threading.Thread(target=self.run).start()
+        
+    def end(self):
+        self.is_alive = False
         
     def run(self):
         while self.is_alive:

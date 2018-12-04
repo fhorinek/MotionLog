@@ -25,13 +25,13 @@ class hub(log.Logger):
         self.bt.write(["end"])
         
     def parse_data(self, data):
-        self.log("parse data " + str(data.cmd) + " " + str(data.payload ), log.DEBUG)
+        #self.log("parse data " + str(data.cmd) + " " + str(data.payload ), log.DEBUG)
         if data.cmd == pr.REQ_ID:
             packet = pr.Packet(pr.ANS_ID, {"label": self.label})
             self.net.send_packet(packet)
             
         if data.cmd == pr.DEVICE_CONNECT:
-            self.bt.write(["connect", data.payload["addr"], data.payload["type"]])
+            self.bt.write(["connect", data.payload["addr"]])
             
         if data.cmd == pr.DEVICE_CONF:
             self.bt.write(["config", data.payload["addr"], data.payload["add"], data.payload["remove"], data.payload["fw"]])
@@ -46,10 +46,9 @@ class hub(log.Logger):
         self.start_net()
         
         self.bt.start()
-        self.bt.write(["scan"])
         
         while self.running:
-            self.net.wait(0.5)
+            self.net.wait(0.1)
             for msg in self.net.read():
                 self.log("cmd " + str(msg), log.DEBUG)
 
@@ -64,26 +63,21 @@ class hub(log.Logger):
                     del self.net
                     self.start_net()
 
-            self.bt.wait(0.5)
+            self.bt.wait(0.1)
             for msg in self.bt.read():
                 self.log("cmd " + str(msg), log.DEBUG)
 
                 cmd = msg[0]
                 
                 if cmd == "scan":
-                    print msg
                     if msg[1] is not False:
                         self.net.send_packet(pr.Packet(pr.SCAN_IRQ, msg[1]))
-                        
-                    self.bt.write(["scan"])
+
                     
                 if cmd == "crash":
                     del self.bt
                     self.bt = bt.interface.Interface(self)
                     self.bt.start()
-                    self.bt.write(["scan"])
-                    
-
      
     def boot(self):
         self.log("Loop start", log.INFO)    
@@ -94,5 +88,5 @@ class hub(log.Logger):
             self.end()
         self.log("Loop end", log.INFO)        
     
-
-cProfile.run("hub(\"test hub\").boot()", sort="tottime")
+hub("test hub").boot()
+#cProfile.run("hub(\"test hub\").boot()", sort="tottime")
